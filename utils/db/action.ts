@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "./dbConfig";
-import { Users, Notifications, Transactions, Reports, Rewards,collectedWastes } from "./schema";
+import { Users, Notifications, Transactions, Reports, Rewards,collectedWastes,  Buyers,Sellers } from "./schema";
 import { eq, sql, and, desc } from "drizzle-orm";
 
 export async function createUser(email: string, name: string) {
@@ -646,4 +646,67 @@ export async function getOrCreateReward(userId: number) {
     console.error("Error getting or creating reward:", error);
     return null;
   }
+}
+
+
+
+export async function UploadForSale(
+  userId:number,
+  wasteType: string,
+  role: string,
+  quantity: string,
+  phone: string,
+  location: string,
+  email: string,
+  
+){
+  try {
+    const seller = await db
+      .insert(Sellers)
+      .values({
+        userId,
+        wasteType,
+        role,
+        quantity,
+        phone,
+        location,
+        email,
+        createdAt: new Date(),
+      })
+      .returning()
+      .execute();
+
+    return seller;
+  } catch (error) {
+    console.error("Error uploading for sale:", error);
+    throw error;
+  }
+}
+
+
+//update the status whether it sold or searching
+export async function updateSellerStatus(sellerId: number, newStatus: 'searching' | 'sold') {
+  try {
+    const updated = await db
+      .update(Sellers)
+      .set({ status: newStatus })
+      .where(eq(Sellers.id, sellerId))
+      .returning()
+      .execute();
+
+    return updated[0];
+  } catch (err) {
+    console.error("Failed to update seller status:", err);
+    throw err;
+  }
+}
+
+
+
+export async function getSellersByUser(userId: number) {
+  return await db
+    .select()
+    .from(Sellers)
+    .where(eq(Sellers.userId, userId))
+    .orderBy(desc(Sellers.createdAt)); // optional sorting
 }

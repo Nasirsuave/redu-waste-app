@@ -80,3 +80,35 @@ export const Transactions = pgTable("Transactions", {
   description: text("description").notNull(),
   date: timestamp("date").defaultNow().notNull(),
 });
+
+
+
+export const Sellers = pgTable('sellers', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull(), // foreign key to Users table
+  role: varchar('role', { length: 10 }).notNull(), // 'seller' or 'buyer'
+  wasteType: varchar('waste_type', { length: 100 }).notNull(),
+  quantity: varchar('quantity', { length: 50 }).notNull(), // e.g., "10kg", "5 tons
+  location: varchar('location', { length: 255 }).notNull(),
+  price: varchar('price', { length: 50 }), // seller: price or "free"
+  email: varchar('email', { length: 100 }),
+  phone: varchar('phone', { length: 20 }),
+  status: varchar('status', { length: 20 }).notNull().default('searching'), // 'searching' or 'bought'`
+  createdAt: timestamp('created_at').defaultNow(),
+  //might add a new field called viewed
+  // updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
+
+export const Buyers = pgTable('buyers', {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id').notNull(),
+    role: varchar('role', { length: 10 }).notNull(),
+    phone: varchar('phone', { length: 20 }),
+    wasteType: varchar('waste_type', { length: 100 }).notNull(),
+    location: varchar('location', { length: 255 }).notNull(),
+    createdAt: timestamp('created_at').defaultNow(),
+    // updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    maxDistanceKm: integer('max_distance_km').notNull(), //the max location the seller should be away from the buyer
+    preferredWasteType: varchar('preferred_waste_type', { length: 100 }).notNull()
+})
