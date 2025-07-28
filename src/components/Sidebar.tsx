@@ -6,11 +6,11 @@ import { MapPin,Trash,Coins,Medal,Settings, Home,ShoppingCart  } from 'lucide-re
 
 
 const sidebarItems = [
-    { href: "/", label: "Home", icon:Home  },
-    { href: "/reports", label: "Report Waste", icon:MapPin  },
+    { href: "/dashboard", label: "Home", icon:Home  },
+    { href: "/report", label: "Report Waste", icon:MapPin  },
     { href: "/collect", label: "Collect Waste", icon:Trash  },
-    { href: "/purchase", label: "Purchase Reusable", icon:ShoppingCart   },
-    { href: "/rewards", label: "Rewards", icon:Coins  },
+    { href: "/purchase-buy", label: "Purchase & Sell", icon:ShoppingCart   },
+    // { href: "/reward", label: "Rewards", icon:Coins  },
     { href: "/leaderboard", label: "Leaderboard", icon:Medal  },
 ];
 

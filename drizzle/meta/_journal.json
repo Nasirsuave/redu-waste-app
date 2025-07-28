@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1753201796324,
+      "tag": "0000_kind_chamber",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1753205296536,
+      "tag": "0001_overrated_lyja",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1753304341326,
+      "tag": "0002_polite_black_bolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1753475836891,
+      "tag": "0003_flippant_spacker_dave",
+      "breakpoints": true
+    }
+  ]
+}

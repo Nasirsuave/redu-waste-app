@@ -1,6 +1,11 @@
-import { ArrowRight, Leaf, Recycle, Users, Coins, MapPin, ChevronRight,Trash2 }  from 'lucide-react'
+"use client"
+import { ArrowRight, Leaf, Recycle, Users, Coins, MapPin, ChevronRight, Trash2, LogIn }  from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
+import { useWeb3AuthConnect, useWeb3AuthDisconnect, useWeb3AuthUser } from "@web3auth/modal/react"
+import { useState } from 'react'
+import { toast } from 'react-hot-toast'
+import { createUser, getUserByEmail } from '../../utils/db/action'
 
 
 function AnimatedGlobe() {
@@ -18,7 +23,44 @@ function AnimatedGlobe() {
 
 
 export default function Home(){
+  const { connect, isConnected, loading: connectLoading } = useWeb3AuthConnect()
+  const { userInfo } = useWeb3AuthUser()
+  const [stats] = useState({
+    wasteCollected: '20 Kg',
+    reportsSubmitted: 50,
+    tokensEarned: 150,
+    co2Offset: '50 Kg'
+  })
 
+  const handleLogin = async () => {
+    try {
+      await connect()
+      
+      // Wait a moment for userInfo to be populated after connect
+      // setTimeout(async () => {
+
+        // if (userInfo?.email) {
+        //   // Check if user already exists
+        //   const existingUser = await getUserByEmail(userInfo.email)
+          
+        //   if (!existingUser) {
+        //     // Create new user if they don't exist
+        //     await createUser(
+        //        userInfo.email,
+        //        userInfo.name || '',
+        //     )
+        //     toast.success('Account created successfully!')
+        //   } else {
+        //     toast.success('Welcome back!')
+        //   }
+        // }
+      // }, 1000)
+      
+    } catch (error) {
+      console.error('Login error:', error)
+      toast.error('Failed to login. Please try again.')
+    }
+  }
   
   return (
     <div className='container mx-auto px-4 py-16'>
@@ -30,9 +72,29 @@ export default function Home(){
         <p className='text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed mb-8'>
           Join our community in making waste management more efficient and rewarding
         </p>
-        <Button className='bg-green-600 hover:bg-green-700 text-white text-lg py-6 px-10 rounded-full'>
-          Report Waste
-        </Button>
+        {!isConnected ? (
+          <Button 
+            onClick={handleLogin} 
+            className='bg-green-600 hover:bg-green-700 text-white text-lg py-6 px-10 rounded-full'
+            disabled={connectLoading}
+          >
+            {connectLoading ? (
+              <span className='flex items-center'>
+                <span className='animate-spin mr-2'>⚪</span> Connecting...
+              </span>
+            ) : (
+              <span className='flex items-center'>
+                <LogIn className='mr-2' /> Login to Start
+              </span>
+            )}
+          </Button>
+        ) : (
+          <Link href="/report">
+            <Button className='bg-green-600 hover:bg-green-700 text-white text-lg py-6 px-10 rounded-full'>
+              Report Waste <ArrowRight className='ml-2' />
+            </Button>
+          </Link>
+        )}
       </section>
 
       <section className='grid md:grid-cols-3 gap-10 mb-20'>
@@ -53,18 +115,35 @@ export default function Home(){
           />
       </section>
 
-      <section className='bg-white p-10 rounded-3xl shadow-lg mb-20'>
-        <h2 className='text-4xl font-bold mb-12 text-center text-gray-800'>
-          Our Contribution
-        </h2>
-        <div className='grid md:grid-cols-4 gap-6'>
-          <ImapactCard title='Waste collected' value={'20 Kg'} icon={Recycle}/>
-          <ImapactCard title='Report Submitted' value={50} icon={MapPin}/>
-          <ImapactCard title='Tokens Earned' value={150} icon={Coins}/>
-          <ImapactCard title='CO2 Offset' value={'50 Kg'} icon={Leaf}/>
+      {isConnected && (
+        <section className='bg-white p-10 rounded-3xl shadow-lg mb-20 transform hover:scale-105 transition-all duration-300'>
+          <h2 className='text-4xl font-bold mb-12 text-center text-gray-800'>
+            Our Contribution
+          </h2>
+          <div className='grid md:grid-cols-4 gap-6'>
+            <ImapactCard title='Waste collected' value={stats.wasteCollected} icon={Recycle}/>
+            <ImapactCard title='Report Submitted' value={stats.reportsSubmitted} icon={MapPin}/>
+            <ImapactCard title='Tokens Earned' value={stats.tokensEarned} icon={Coins}/>
+            <ImapactCard title='CO2 Offset' value={stats.co2Offset} icon={Leaf}/>
 
 
         </div>
+      </section>
+      )}
+
+      <section className='text-center py-10'>
+        <h2 className='text-3xl font-bold mb-6'>Ready to Make a Difference?</h2>
+        <p className='text-gray-600 mb-8'>
+          Start your journey towards a cleaner environment today.
+        </p>
+        {!isConnected && (
+          <Button 
+            onClick={handleLogin}
+            className='bg-green-600 hover:bg-green-700 text-white'
+          >
+            Get Started <ArrowRight className='ml-2' />
+          </Button>
+        )}
       </section>
     </div>
   )

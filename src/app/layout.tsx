@@ -1,46 +1,45 @@
 'use client'
-
-import {useState,useEffect} from 'react'
-
-import {Inter} from 'next/font/google'
-
 import './globals.css'
 
-import Header from '../components/Header'
-//sidebar
+import { LoadScript } from '@react-google-maps/api'
+import { Inter } from 'next/font/google'
+import { WagmiProvider } from "@web3auth/modal/react/wagmi";
+import { Toaster } from 'react-hot-toast'
+import { Web3AuthProvider } from '@web3auth/modal/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import web3AuthContextConfig from '../../utils/db/web3AuthContext'
 
-import {Toaster} from 'react-hot-toast'
-import Sidebar from '@/components/Sidebar'
-import { SidebarOpen } from 'lucide-react'
+const inter = Inter({ subsets: ['latin'] })
 
-const inter = Inter({ subsets: ['latin']})
 
+const queryClient = new QueryClient();
 export default function RootLayout({
   children
-  }:Readonly<{
-   children: React.ReactNode
-  }
-  >){
-
-    const [sidebarOpen,setsidebarOpen] = useState(false)
-    const [totalEarnings,settotalEarnings] = useState(0)
+}: Readonly<{
+  children: React.ReactNode
+}
+>) {
 
 
-    return(
-      <html lang='en'>
-       <body className={inter.className}>
-         <div className='min-h-screen bg-gray-50 flex flex-col '>
-          <Header onMenuClick={() => setsidebarOpen(!sidebarOpen)} totalEarnings={totalEarnings} />
-          <div className='flex '>
-            {/*sidebar */}
-            <Sidebar open={sidebarOpen}/>
-            <main className='flex-1 p-4 lg:p-8 ml-0 lg:ml-64 transition-all duration-300 bg-blue-100'>
-              {children}
-            </main>
-          </div>
-         </div>
-         <Toaster />
-       </body> 
-      </html>
-    )
-  }
+
+  return (
+    <html lang='en'>
+      <body className={inter.className}>
+        <Web3AuthProvider config={web3AuthContextConfig}>    {/* // IMP START - Setup Wagmi Provider */}
+          <QueryClientProvider client={queryClient}>
+            <WagmiProvider>
+              <LoadScript
+                googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}
+                libraries={['places']}
+              >
+                {children}
+                <Toaster />
+              </LoadScript>
+            </WagmiProvider>
+          </QueryClientProvider>
+        </Web3AuthProvider>
+      </body>
+    </html>
+  )
+
+}
