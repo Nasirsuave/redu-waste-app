@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "./dbConfig";
-import { Users, Notifications, Transactions, Reports, Rewards,collectedWastes,  Buyers,Sellers } from "./schema";
+import { Users, Notifications, Transactions, Reports, Rewards,collectedWastes, Buyers,Sellers } from "./schema";
 import { eq, sql, and, desc } from "drizzle-orm";
 
 export async function createUser(email: string, name: string) {
@@ -42,6 +42,16 @@ export async function getUnreadNotifications(userId: number) {
     console.error("Error fetching unread notifications:", error);
     return [];
   }
+}
+
+//get the total point for a user
+export async function getTotalTransactionAmount(userId: number) {
+  const result = await db
+    .select({ total: sql`SUM(${Transactions.amount})` })
+    .from(Transactions)
+    .where(eq(Transactions.userId, userId));
+
+  return result[0]?.total ?? 0;
 }
 
 export async function getUserBalance(userId: number): Promise<number> {
@@ -236,39 +246,39 @@ export async function createReport(
   }
 }
 
-export async function updateRewardPoints(userId: number, pointsToAdd: number) {
-  try {
-    if (userId == null || pointsToAdd == null) {
-      throw new Error("Missing required fields for updating reward points");
-    }
+// export async function updateRewardPoints(userId: number, pointsToAdd: number) {
+//   try {
+//     if (userId == null || pointsToAdd == null) {
+//       throw new Error("Missing required fields for updating reward points");
+//     }
 
-    const [upsertedReward] = await db
-      .insert(Rewards)
-      .values({
-        userId,
-        points: pointsToAdd,
-        name: "Default Reward",
-        description: "Auto-generated reward",
-        collectionInfo: "Auto-update based on report",
-        isAvailable: true,
-      })
-      .onConflictDoUpdate({
-        target: Rewards.userId,
-        set: {
-          points: sql`${Rewards.points} + ${pointsToAdd}`,
-          updatedAt: sql`now()`,
-        },
-      })
-      .returning()
-      .execute();
+//     const [upsertedReward] = await db
+//       .insert(Rewards)
+//       .values({
+//         userId,
+//         points: pointsToAdd,
+//         name: "Default Reward",
+//         description: "Auto-generated reward",
+//         collectionInfo: "Auto-update based on report",
+//         isAvailable: true,
+//       })
+//       .onConflictDoUpdate({
+//         target: Rewards.userId,
+//         set: {
+//           points: sql`${Rewards.points} + ${pointsToAdd}`,
+//           updatedAt: sql`now()`,
+//         },
+//       })
+//       .returning()
+//       .execute();
 
-    console.log("Upserted reward:", upsertedReward);
-    return upsertedReward;
-  } catch (e) {
-    console.error("Error updating reward points:", e);
-    return null;
-  }
-}
+//     console.log("Upserted reward:", upsertedReward);
+//     return upsertedReward;
+//   } catch (e) {
+//     console.error("Error updating reward points:", e);
+//     return null;
+//   }
+// }
 
 
 // export async function updateRewardPoints(userId: number, pointsToAdd: number) {
@@ -289,58 +299,58 @@ export async function updateRewardPoints(userId: number, pointsToAdd: number) {
 //   }
 // }
 
-// export async function updateRewardPoints(userId: number, pointsToAdd: number) {
-//   try {
-//     // Check if a reward already exists for the user
-//     const existingReward = await db
-//       .select()
-//       .from(Rewards)
-//       .where(eq(Rewards.userId, userId))
-//       .execute();
+export async function updateRewardPoints(userId: number, pointsToAdd: number) {
+  try {
+    // Check if a reward already exists for the user
+    const existingReward = await db
+      .select()
+      .from(Rewards)
+      .where(eq(Rewards.userId, userId))
+      .execute();
 
-//     let finalReturn;
-//     if (existingReward.length === 0) {
-//       // No reward yet — insert one
-//       const [newReward] = await db
-//         .insert(Rewards)
-//         .values({
-//           userId,
-//           points: pointsToAdd,
-//           name: "Initial Reward",
-//           collectionInfo: "First reward for this user",
-//           createdAt: new Date(),
-//           updatedAt: new Date(),
-//           isAvailable: true,
-//         })
-//         .returning()
-//         .execute();
+    let finalReturn;
+    if (existingReward.length === 0) {
+      // No reward yet — insert one
+      const [newReward] = await db
+        .insert(Rewards)
+        .values({
+          userId,
+          points: pointsToAdd,
+          name: "Initial Reward",
+          collectionInfo: "First reward for this user",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          isAvailable: true,
+        })
+        .returning()
+        .execute();
 
-//       console.log("🎉 Created new reward row:", newReward);
-//       // return newReward;
-//       finalReturn
-//     } else {
-//       // Reward exists — update it
-//       const [updatedReward] = await db
-//         .update(Rewards)
-//         .set({
-//           points: sql`${Rewards.points} + ${pointsToAdd}`,
-//           updatedAt: new Date(),
-//         })
-//         .where(eq(Rewards.userId, userId))
-//         .returning()
-//         .execute();
+      console.log("🎉 Created new reward row:", newReward);
+      // return newReward;
+      finalReturn
+    } else {
+      // Reward exists — update it
+      const [updatedReward] = await db
+        .update(Rewards)
+        .set({
+          points: sql`${Rewards.points} + ${pointsToAdd}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(Rewards.userId, userId))
+        .returning()
+        .execute();
 
-//       console.log("✅ Updated reward:", updatedReward);
-//       // return updatedReward;  
-//       finalReturn = updatedReward;
+      console.log("✅ Updated reward:", updatedReward);
+      // return updatedReward;  
+      finalReturn = updatedReward;
 
-//     }
-//     return finalReturn;
-//   } catch (error) {
-//     console.error("🔥 Error updating/inserting reward points:", error);
-//     return null;
-//   }
-// }
+    }
+    return finalReturn;
+  } catch (error) {
+    console.error("🔥 Error updating/inserting reward points:", error);
+    return null;
+  }
+}
 
 export async function createTransaction(
   userId: number,
@@ -709,4 +719,68 @@ export async function getSellersByUser(userId: number) {
     .from(Sellers)
     .where(eq(Sellers.userId, userId))
     .orderBy(desc(Sellers.createdAt)); // optional sorting
+}
+
+
+
+export async function UploadForBuy(
+  userId:number,
+  preferredWasteType: string,
+  role: string,
+  phone: string,
+  maxDistanceKm: number,
+  location: string,
+){
+  try{
+    const [newBuyer] = await db
+    .insert(Buyers)
+    .values({
+      userId,
+      preferredWasteType,
+      role,
+      phone,
+      maxDistanceKm,
+      location,
+      status: 'searching', // default value, but you can explicitly set it
+    })
+    .returning()
+    .execute()
+
+    return newBuyer;
+  }catch(error) {
+    console.error("Error uploading for buy:", error);
+    throw error;
+  }
+}
+
+
+export async function getBuyersByUser(userId: number) {
+  try {
+    const buyers = await db
+      .select()
+      .from(Buyers)
+      .where(eq(Buyers.userId, userId));
+    return buyers;
+  } catch (error) {
+    console.error('Error fetching buyers:', error);
+    return [];
+  }
+}
+
+
+//update the status whether it bought or searching
+export async function updateBuyerStatus(buyerId: number, newStatus: 'searching' | 'bought') {
+  try {
+    const updated = await db
+      .update(Buyers)
+      .set({ status: newStatus })
+      .where(eq(Buyers.id, buyerId))
+      .returning()
+      .execute();
+
+    return updated[0];
+  } catch (err) {
+    console.error("Failed to update seller status:", err);
+    throw err;
+  }
 }

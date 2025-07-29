@@ -9,7 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Badge } from './ui/badge'
 import { useWeb3AuthConnect, useWeb3AuthDisconnect, useWeb3AuthUser } from "@web3auth/modal/react"
 import { useAccount, useTransactionConfirmations } from "wagmi"
-import { createUser, getUserByEmail, getUnreadNotifications, getUserBalance, markNotificationAsRead } from '../../utils/db/action'
+import { createUser, getUserByEmail, getUnreadNotifications, getUserBalance, markNotificationAsRead,getTotalTransactionAmount } from '../../utils/db/action'
 import { toast } from 'react-hot-toast'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 
@@ -26,19 +26,26 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
 
     const [notification, setNotification] = useState<Notification[]>([])
     const [balance, setBalance] = useState(0)
+    const [pointBalance, setPointBalance] = useState(0)
     const isMobile = useMediaQuery("(max-width: 768px)");
-
   
     // Remove the useEffect for user creation as we'll handle it in handleLogin
 
     useEffect(() => {
         const fetchNotifications = async () => {
+            
             //we check if userinfo contains an email
             //Waits for userInfo (which might come from Web3Auth login).
             if (userInfo && userInfo.email) { //When userInfo.email is available
                 //It fetches the user from your DB.
                 const user = await getUserByEmail(userInfo.email)
+                const ptsBalance = await getTotalTransactionAmount(user.id)
+                console.log("Balance in points:", ptsBalance)
+                // setPointBalance(ptsBalance)    will come here later
+                // console.log("Updated point balance:", pointBalance)
+                
                 if (user) {
+                    // console.log("Balance in points:", pointBalance)
                     //Then fetches unread notifications using the user’s ID.
                     const unreadNotifications = await getUnreadNotifications(user.id)
                     //Sets the notifications in state.
@@ -60,6 +67,7 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
                 const user = await getUserByEmail(userInfo.email);
                 if (user) {
                     const userBalance = await getUserBalance(user.id)
+                    // const userBalance = await getTotalTransactionAmount(user.id) ?? 0
                     setBalance(userBalance)
                 }
             }
@@ -200,6 +208,7 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
                         <Coins className='h-4 w-4 md:h-5 md:w-5 mr-1 text-green-500' />
                         <span className='font-semibold text-sm md:text-base text-gray-800'>
                             {balance.toFixed(2)}
+                            
                         </span>
                     </div>
                     {!isConnected ? (

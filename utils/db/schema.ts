@@ -35,8 +35,8 @@ export const Rewards = pgTable("rewards", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")
     .references(() => Users.id)
-    .notNull()
-    .unique(), //here 
+    .notNull(),
+    //.unique(), //here 
   points: integer("points").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -105,10 +105,10 @@ export const Buyers = pgTable('buyers', {
     userId: integer('user_id').notNull(),
     role: varchar('role', { length: 10 }).notNull(),
     phone: varchar('phone', { length: 20 }),
-    wasteType: varchar('waste_type', { length: 100 }).notNull(),
+    preferredWasteType: varchar('preferred_waste_type', { length: 100 }).notNull(),
     location: varchar('location', { length: 255 }).notNull(),
     createdAt: timestamp('created_at').defaultNow(),
     // updatedAt: timestamp('updated_at').defaultNow().notNull(),
     maxDistanceKm: integer('max_distance_km').notNull(), //the max location the seller should be away from the buyer
-    preferredWasteType: varchar('preferred_waste_type', { length: 100 }).notNull()
+    status: varchar('status', { length: 20 }).notNull().default('searching'), // 'searching' or 'bought'
 })
