@@ -2,7 +2,13 @@
 
 import { db } from "./dbConfig";
 import { Users, Notifications, Transactions, Reports, Rewards,collectedWastes, Buyers,Sellers } from "./schema";
-import { eq, sql, and, desc } from "drizzle-orm";
+import { eq, sql, and, desc, ilike } from "drizzle-orm";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+
+const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY as string
+
+
 
 export async function createUser(email: string, name: string) {
   try {
@@ -45,14 +51,25 @@ export async function getUnreadNotifications(userId: number) {
 }
 
 //get the total point for a user
-export async function getTotalTransactionAmount(userId: number) {
-  const result = await db
-    .select({ total: sql`SUM(${Transactions.amount})` })
-    .from(Transactions)
-    .where(eq(Transactions.userId, userId));
+// export async function getTotalTransactionAmount(userId: number) {
+//   const result = await db
+//     .select({ total: sql`SUM(${Transactions.amount})` })
+//     .from(Transactions)
+//     .where(eq(Transactions.userId, userId));
 
-  return result[0]?.total ?? 0;
+//   return result[0]?.total ?? 0;
+// }
+
+
+export async function getTotalTransactionAmount(userId: number): Promise<{ total: number }> {
+  const result = await db
+    .select({ total: sql<number>`COALESCE(SUM(points), 0)` }) // or whatever column you're summing
+    .from(Rewards)
+    .where(eq(Rewards.userId, userId));
+
+  return result[0]; // return object with total key
 }
+
 
 export async function getUserBalance(userId: number): Promise<number> {
   const transactions = (await getRewardTransactions(userId)) || [];
@@ -188,6 +205,7 @@ export async function markNotificationAsRead(notificationId: number) {
 export async function createReport(
   userId: number,
   location: string,
+  exactLocation: string,
   wasteType: string,
   amount: string,
   imageUrl?: string,
@@ -203,6 +221,7 @@ export async function createReport(
       .values({
         userId,
         location,
+        exactLocation,
         wasteType,
         amount,
         imageUrl: imageUrl ?? null,
@@ -419,6 +438,24 @@ export async function getRecentReports(limit: number = 10) {
   }
 }
 
+
+//get all report 
+export async function getAllReports() {
+  try {
+    //can be tailored and reused in your purchase reusable section ,where you want to ddisplay only three users with the highest point
+    //NB: yours will be orderBy(Rewards)
+    //also it will be location based
+    //yours -> await- db.select().from(Rewards).orderBy(desc(Rewards.points)).limit(4).execute
+    const reports = await db
+      .select()
+      .from(Reports)
+      .execute();
+    return reports;
+  } catch (e) {
+    console.error("Error fetching recent reports", e);
+    return [];
+  }
+}
 
 
 export async function getWasteCollectionTasks(limit: number = 20) {
@@ -782,5 +819,152 @@ export async function updateBuyerStatus(buyerId: number, newStatus: 'searching' 
   } catch (err) {
     console.error("Failed to update seller status:", err);
     throw err;
+  }
+}
+
+
+
+//getSellersByWasteType
+// export async function getSellersByWasteType(wasteType: string) {
+//   try {
+//     const allSellers = await db.select().from(Sellers);
+//     console.log("✅ All sellers in DB:", allSellers);
+
+//     const sellers = await db.select().from(Sellers).where(ilike(Sellers.wasteType, wasteType.trim().toLowerCase()))
+//       //.where(eq(Sellers.status, "searching")); // Only include actively searching sellers
+//     console.log("Matching sellers found:", sellers);
+
+//     return sellers;
+//   } catch (error) {
+//     console.error("Error fetching sellers by waste type:", error);
+//     throw new Error("Could not fetch sellers.");
+//   }
+// }
+
+
+export async function getSellersByWasteType(wasteType: string) {
+  try {
+    const allSellers = await db.select().from(Sellers);
+    console.log("✅ All sellers in DB:", allSellers);
+
+    const cleaned = wasteType.trim().toLowerCase();
+
+    const sellers = await db
+      .select()
+      .from(Sellers)
+      .where(sql`LOWER(TRIM(${Sellers.wasteType})) = ${cleaned}`);
+
+    console.log("✅ Matching sellers found:", sellers);
+    return sellers;
+  } catch (error) {
+    console.error("❌ Error fetching sellers by waste type:", error);
+    throw new Error("Could not fetch sellers.");
+  }
+}
+
+
+
+
+//match with Gemini
+
+export async function matchWithGemini({
+  buyerLocation,
+  maxDistanceKm,
+  sellerList,
+}: {
+  buyerLocation: string;
+  maxDistanceKm: number;
+  sellerList: {
+    sellerId: number;
+    location: string;
+    points: number;
+  }[];
+}) {
+  try {
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const prompt = `
+You are an assistant helping match a buyer with sellers based on location and reward points.
+
+Buyer is located at:
+"${buyerLocation}"
+
+Maximum acceptable distance: ${maxDistanceKm} km
+
+Here is a list of potential sellers:
+${sellerList.map(s => `Seller ID: ${s.sellerId}, Location: ${s.location}, Points: ${s.points}`).join('\n')}
+
+Your task:
+-You are good with the world map, so ensure Location of the seller tell us whether seller is within buyer Location(Be accurate as possible)
+- Calculate the distance between the buyer and each seller
+- Remove any sellers who are farther than ${maxDistanceKm} km
+- From the remaining sellers, sort by:
+  1. Shortest distance
+  2. Highest points
+
+Notice: the example below should be the format of your response(let it guide you in how you will strucuture your own response)
+
+Your response should not look like this format :
+ \`\`\`\  json
+[
+  {
+    "sellerId": 1,
+    "distanceKm": 1.5,
+    "points": 50,
+    "BuyerCloserToSeller": true or false
+  },
+  {
+    "sellerId": 3,
+    "distanceKm": 1.8,
+    "points": 30,
+    "BuyerCloserToSeller": true or false
+  }
+]
+\`\`\`
+
+instead it should look like this format:
+[
+  {
+    "sellerId": 1,
+    "distanceKm": 1.5,
+    "points": 50,
+    "BuyerCloserToSeller": true or false
+  },
+  {
+    "sellerId": 3,
+    "distanceKm": 1.8,
+    "points": 30,
+    "BuyerCloserToSeller": true or false
+  }
+]
+
+- No code blocks (no triple backticks like \`\`\` or \`\`\`json)
+- No explanations
+- No text before or after the JSON
+- No labels like "Here's your response:" or "Sure, here is the data:"
+
+❗Only return the raw JSON array. Nothing else.
+
+
+
+
+
+
+
+`;
+    console.log('Seller List:', sellerList);
+    const result = await model.generateContent([prompt]);
+    const response = await result.response;
+    const text = response.text();
+
+    console.log("Raw Gemini response:", text);
+
+    // Parse Gemini's plain JSON response
+    const matchedSellers = JSON.parse(text);
+    return matchedSellers;
+  } catch (error) {
+    console.error("Error in Gemini matchmaking:", error);
+    throw new Error("Failed to match sellers using Gemini.");
   }
 }

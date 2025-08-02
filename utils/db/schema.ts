@@ -20,8 +20,9 @@ export const Reports = pgTable("reports", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")
     .references(() => Users.id)
-    .notNull().unique(),
+    .notNull(), //.unique(),
   location: text("location").notNull(),
+  exactLocation: text("exact_location").notNull(), // new field for exact location
   wasteType: varchar("waste_type", { length: 255 }).notNull(),
   amount: varchar("amount", { length: 255 }).notNull(),
   imageUrl: text("image_url"),

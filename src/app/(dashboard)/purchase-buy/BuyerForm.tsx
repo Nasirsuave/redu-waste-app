@@ -7,9 +7,18 @@ import { useState,useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import SellerList from './SellerList';
-import { getUserByEmail,UploadForBuy,getBuyersByUser,updateBuyerStatus } from '../../../../utils/db/action';
+import { StandaloneSearchBox, useJsApiLoader } from '@react-google-maps/api'
+import { Libraries } from "@react-google-maps/api"
+import { getUserByEmail,UploadForBuy,getBuyersByUser,updateBuyerStatus,getTotalTransactionAmount,getSellersByWasteType,matchWithGemini } from '../../../../utils/db/action';
 import { Loader, CheckCircle2, SearchCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+
+
+
+const googleApikey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as string
+
+const libraries: Libraries = ['places']
+
 
 
 type Transaction = {
@@ -27,6 +36,7 @@ const [user, setUser] = useState<{ id: number; email: string; name: string } | n
 
 const [form, setForm] = useState({
   location: '',
+  exactLocation: '', // New field for exact location
   maxDistanceKm: 0,
   phone: '',
   preferredWasteType: '',
@@ -40,6 +50,7 @@ const [transactions, setTransactions] = useState<Array<{
   status: string;
 }>>([]);
 
+     
 
     const findSellers = async () => {
         //do something to find sellers
@@ -67,6 +78,76 @@ const [transactions, setTransactions] = useState<Array<{
     const updatedBuyers = await getBuyersByUser(user.id);
     setTransactions(updatedBuyers);
 
+    //working on it 
+      console.log("Value of preferredWasteType:", preferredWasteType);
+     const matchingSellers = await getSellersByWasteType(preferredWasteType);
+     console.log("Matching Sellers:", matchingSellers);
+     
+     console.log("Before Seller Data For Gemini")
+    // const sellerDataForGemini = await Promise.all(
+    //   matchingSellers
+    //   .filter((seller) => seller.userId !== user.id) //  Exclude the buyer
+    //   .map(async (seller) => ({
+    //     sellerId: seller.id,
+    //     location: seller.location,
+    //     points: (await getTotalTransactionAmount(seller.userId) as { total: number }).total  //This tells TypeScript: “Trust me — this will return a { total: number } object.”
+    //   }))
+    // );
+
+    const sellerDataForGemini = await Promise.all(
+  matchingSellers
+    .filter((seller) => seller.userId !== user.id) // Exclude the buyer
+    .map(async (seller) => {
+      const result = await getTotalTransactionAmount(seller.userId);
+      console.log(`👉 Seller ID: ${seller.userId}, Reward Points Result:`, result);
+
+      return {
+        sellerId: seller.id,
+        location: seller.location,
+        points: result?.total ?? 0, // fallback to 0 if undefined
+      };
+    })
+);
+
+
+    console.log("After Seller Data For Gemini");
+
+  
+   
+  
+
+      console.log("Before Match With Gemini")
+      const geminiResult = await matchWithGemini({
+      buyerLocation: location,
+      maxDistanceKm,
+      sellerList: sellerDataForGemini,
+    });
+    console.log("Before Match With Gemini")
+    
+
+    console.log("Before overall result")
+    const topSeller = geminiResult?.matchedSellers?.[0]; 
+    console.log('Top Seller:', topSeller);
+
+    console.log("After overall result")
+
+    // }catch(error){
+    //   console.error('Error matching with Gemini:', error);
+    //   toast.error('Failed to find matching sellers');
+    // }
+  
+
+
+    //working on it 
+
+  
+    // setForm({
+    //   location: '',
+    //   maxDistanceKm: 0,
+    //   phone: '',
+    //   preferredWasteType: '',
+    // })
+
         toast.success('Buyer info uploaded successfully');
 
         }catch(error){
@@ -75,6 +156,7 @@ const [transactions, setTransactions] = useState<Array<{
         }
        
     }
+
 
   const toggleStatus = (id: number, currentStatus: string) => {
     const newStatus = currentStatus === 'searching' ? 'bought' : 'searching';
@@ -87,16 +169,41 @@ const [transactions, setTransactions] = useState<Array<{
     }
   };
 
-//    const toggleStatus = async (id: number, currentStatus: string) => {
-//       const newStatus = currentStatus === 'searching' ? 'sold' : 'searching';
-//       try {
-//         await updateSellerStatus(id, newStatus);
-//         toast.success(`Status updated to ${newStatus}`);
-//         //fetchSellers(); // Refresh list
-//       } catch (err) {
-//         toast.error('Failed to update status');
-//       }
-//     };
+
+  //exact location
+  const fetchExactLocation = async (setForm: any, toast: any) => {
+  if (!navigator.geolocation) {
+    toast.error('Geolocation is not supported by your browser');
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(async (position) => {
+    const { latitude, longitude } = position.coords;
+
+    try {
+      const geocoder = new window.google.maps.Geocoder();
+      const latLng = { lat: latitude, lng: longitude };
+
+      geocoder.geocode({ location: latLng }, (results, status) => {
+        if (status === 'OK' && results[0]) {
+          const fullAddress = results[0].formatted_address;
+          const finalLocation = `${fullAddress} (Lat: ${latitude.toFixed(5)}, Lng: ${longitude.toFixed(5)})`;
+          setForm((prev: any) => ({
+            ...prev,
+            exactLocation: finalLocation,
+          }));
+        } else {
+          toast.error('Unable to fetch address from coordinates');
+        }
+      });
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      toast.error('Error fetching location');
+    }
+  }, () => {
+    toast.error('Unable to retrieve your location');
+  });
+};
 
    useEffect(() => {
     const fetchUser = async () => {
@@ -129,6 +236,12 @@ const [transactions, setTransactions] = useState<Array<{
     fetchUser(); // Invoke the async function
   }, []);
 
+    useEffect(() => {
+  
+    fetchExactLocation(setForm,toast);
+  
+}, []);
+
   return (
     <div className="space-y-8">
       {/* Buy Form */}
@@ -139,8 +252,12 @@ const [transactions, setTransactions] = useState<Array<{
         value={form.location}
         onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
         />
+        <Input
+        value={form.exactLocation}
+        readOnly
+        />
+        
        <Input
-        type="number"
         placeholder="Max Distance (km)"
         value={form.maxDistanceKm}
         onChange={(e) =>

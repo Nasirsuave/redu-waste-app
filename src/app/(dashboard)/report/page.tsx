@@ -10,7 +10,7 @@ import { Libraries } from "@react-google-maps/api"
 import { useRouter } from "next/navigation"
 import { toast } from 'react-hot-toast'
 import { resolve } from "path"
-import { createReport, getUserByEmail, getRecentReports, createUser } from "../../../../utils/db/action"
+import { createReport, getUserByEmail, getRecentReports, getAllReports ,createUser } from "../../../../utils/db/action"
 import { useWeb3AuthConnect, useWeb3AuthDisconnect, useWeb3AuthUser } from "@web3auth/modal/react"
 
 
@@ -31,6 +31,7 @@ export default function ReportPage() {
     Array<{
       id: number;
       location: string;
+      exactLocation: string; // new field for exact location
       wasteType: string;
       amount: string;
       createdAt: string;
@@ -42,6 +43,8 @@ export default function ReportPage() {
     type: '',
     amount: '',
   })
+  const [exactLocation, setExactLocation] = useState(''); // added later
+
 
   const [file, setFile] = useState<File | null>(null)
   //so user will see the image they uploaded
@@ -115,6 +118,61 @@ export default function ReportPage() {
     })
   }
 
+  async function fetchImageAsBase64(imageUrl: string): Promise<string> {
+  const response = await fetch(imageUrl)
+  const blob = await response.blob()
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => resolve((reader.result as string).split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+
+
+  //working on check duplicate 
+ async function checkDuplicateImage(currentImage: string, previousImageUrls: string[]): Promise<boolean> {
+  const genAI = new GoogleGenerativeAI(geminiApiKey)
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' })
+
+  const rawBase64Current = currentImage.includes(',') ? currentImage.split(',')[1] : currentImage;
+
+  for (const url of previousImageUrls) {
+    const base64Previous = await fetchImageAsBase64(url)
+
+    const result = await model.generateContent([
+      {
+        inlineData: {
+          mimeType: 'image/jpeg',
+          data: base64Previous,
+        }
+      },
+      {
+        inlineData: {
+          mimeType: 'image/jpeg',
+          data: rawBase64Current,
+        }
+      },
+      {
+        text: 'Do these two images show the same physical waste item? If the level of your confidence is 80% answer with yes, else answer with no.'
+      }
+    ])
+
+    const response = await result.response.text()
+    console.log('Gemini response:', response)
+    if (response.toLowerCase().includes('yes')) {
+      return true
+    }
+  }
+
+  return false
+}
+
+
+  //working on check duplicate
+
   const handleVerify = async () => {
     if (!file) {
       toast.error('Please upload an image first')
@@ -129,6 +187,32 @@ export default function ReportPage() {
     setVerificationStatus('verifying')
 
     try {
+      //working on it
+      const recentReports = await getAllReports()
+      const recentImageUrls = recentReports
+      .map((report) => report.imageUrl) // You must be storing this
+      .filter(Boolean)
+      
+    //   if (!preview || !recentImageUrls || recentImageUrls.length === 0) {
+    //   toast.error("Image or recent reports missing. Please try again.");
+    //   setIsSubmitting(false);
+    //   return;
+    // }
+
+
+      const rawBase64 = preview.split(',')[1]; 
+      const validImageUrls = recentImageUrls.filter((url): url is string => url !== null);
+      const isDuplicate = await checkDuplicateImage(rawBase64, validImageUrls)
+      if (isDuplicate) {
+      toast.error("This waste item appears to have been reported already.")
+      setIsSubmitting(false)
+      return
+      }
+      
+
+      //working on it 
+
+
       const genAI = new GoogleGenerativeAI(geminiApiKey)
       const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
       const base64Data = await readFileAsBase64(file);
@@ -244,6 +328,7 @@ export default function ReportPage() {
           const report = await createReport(
           collector.id,
           newReport.location,
+          exactLocation, //new change
           newReport.type,
           newReport.amount,
           preview || undefined,
@@ -255,6 +340,7 @@ export default function ReportPage() {
         const formattedReport = {
           id: report.id,
           location: report.location,
+          exactLocation: report.exactLocation, // new field for exact location
           wasteType: report.wasteType,
           amount: report.amount,
           createdAt: report.createdAt.toISOString().split('T')[0]
@@ -313,6 +399,47 @@ export default function ReportPage() {
   }
 
 
+//exact location
+  const fetchExactLocation = async () => {
+  if (!navigator.geolocation) {
+    toast.error('Geolocation is not supported by your browser');
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(async (position) => {
+    const { latitude, longitude } = position.coords;
+
+    try {
+      const geocoder = new window.google.maps.Geocoder();
+      const latLng = { lat: latitude, lng: longitude };
+
+      geocoder.geocode({ location: latLng }, (results, status) => {
+        if (status === 'OK' && results[0]) {
+          const fullAddress = results[0].formatted_address;
+          setExactLocation(`${fullAddress} (Lat: ${latitude.toFixed(5)}, Lng: ${longitude.toFixed(5)})`);
+        } else {
+          toast.error('Unable to fetch address from coordinates');
+        }
+      });
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      toast.error('Error fetching location');
+    }
+  }, () => {
+    toast.error('Unable to retrieve your location');
+  });
+};
+
+
+
+
+  useEffect(() => {
+  if (isLoaded) {
+    fetchExactLocation();
+  }
+}, [isLoaded]);
+
+
 
   useEffect(() => {
     const initializeUser = async () => {
@@ -327,7 +454,9 @@ export default function ReportPage() {
 
         // Then handle user creation/fetch
         if (userInfo?.email) {
+          localStorage.setItem('userEmail', userInfo.email)
           const existingUser = await getUserByEmail(userInfo.email)
+          console.log('Existing user:', existingUser)
 
           if (!existingUser) {
             // Create new user with proper object structure
@@ -443,6 +572,30 @@ export default function ReportPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
           <div>
             <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+            {/* just added */}
+            <Button
+    onClick={fetchExactLocation}
+    type="button"
+    className="mb-4 bg-blue-500 hover:bg-blue-600 text-white"
+  >
+    Use My Current Location
+  </Button>
+
+  {/* New exact location display */}
+          <div className="mb-6">
+            <label htmlFor="exact-location" className="block text-sm font-medium text-gray-700 mb-1">
+              Exact Location (Auto-detected)
+            </label>
+            <input
+              type="text"
+              id="exact-location"
+              name="exact-location"
+              value={exactLocation}
+              readOnly
+              className="w-full px-4 py-2 border border-gray-300 rounded-xl bg-gray-100 text-gray-700"
+            />
+          </div>
+            {/* last added */}
             {isLoaded ? (
               <StandaloneSearchBox
                 onLoad={onLoad}

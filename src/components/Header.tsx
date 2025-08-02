@@ -39,8 +39,8 @@ export default function Header({ onMenuClick, totalEarnings }: HeaderProps) {
             if (userInfo && userInfo.email) { //When userInfo.email is available
                 //It fetches the user from your DB.
                 const user = await getUserByEmail(userInfo.email)
-                const ptsBalance = await getTotalTransactionAmount(user.id)
-                console.log("Balance in points:", ptsBalance)
+                // const ptsBalance = await getTotalTransactionAmount(user.id)
+                // console.log("Balance in points:", ptsBalance)
                 // setPointBalance(ptsBalance)    will come here later
                 // console.log("Updated point balance:", pointBalance)
                 
