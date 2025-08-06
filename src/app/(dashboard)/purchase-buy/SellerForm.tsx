@@ -14,6 +14,7 @@ export default function SellerForm() {
     wasteType: '',
     quantity: '',
     location: '',
+    exactLocation: '',
     phone: '',
     email: '',
   });
@@ -45,9 +46,9 @@ export default function SellerForm() {
     return;
   }
 
-  const { wasteType, quantity, location, phone, email } = form;
+  const { wasteType, quantity, location, exactLocation, phone, email } = form;
 
-  if (!wasteType || !quantity || !location || !phone || !email) {
+  if (!wasteType || !quantity || !location || !exactLocation || !phone || !email) {
     toast.error('Please fill in all fields.');
     return;
   }
@@ -61,6 +62,7 @@ export default function SellerForm() {
       quantity,       // assuming quantity is stored in 'price' in schema, update schema or name if needed
       phone,
       location,
+      exactLocation,
       email
     );
     toast.success('Sale listing submitted successfully!');
@@ -71,6 +73,7 @@ export default function SellerForm() {
       wasteType: '',
       quantity: '',
       location: '',
+      exactLocation: '',
       phone: '',
       email: user.email || '',
     });
@@ -80,6 +83,42 @@ export default function SellerForm() {
   } finally {
     setLoading(false);
   }
+};
+
+
+//fetch Location coordinate for seller
+  const fetchExactLocation = async (setForm: any, toast: any) => {
+  if (!navigator.geolocation) {
+    toast.error('Geolocation is not supported by your browser');
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(async (position) => {
+    const { latitude, longitude } = position.coords;
+
+    try {
+      const geocoder = new window.google.maps.Geocoder();
+      const latLng = { lat: latitude, lng: longitude };
+
+      geocoder.geocode({ location: latLng }, (results, status) => {
+        if (status === 'OK' && results[0]) {
+          const fullAddress = results[0].formatted_address;
+          const finalLocation = `${fullAddress} (Lat: ${latitude.toFixed(5)}, Lng: ${longitude.toFixed(5)})`;
+          setForm((prev: any) => ({
+            ...prev,
+            exactLocation: finalLocation,
+          }));
+        } else {
+          toast.error('Unable to fetch address from coordinates');
+        }
+      });
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      toast.error('Error fetching location');
+    }
+  }, () => {
+    toast.error('Unable to retrieve your location');
+  });
 };
 
 
@@ -112,12 +151,20 @@ export default function SellerForm() {
   fetchUser(); // Invoke the async function
 }, []);
 
+useEffect(() => {
+  fetchExactLocation(setForm,toast);
+})
+
   return (
     <>
     <div className="space-y-4 bg-white rounded-2xl p-6 shadow-md">
       <h2 className="text-xl font-semibold">Sell Waste</h2>
       <Input placeholder="Waste Type" name="wasteType" onChange={handleChange} />
       <Input placeholder="Quantity (kg)" name="quantity" onChange={handleChange} />
+      <Input
+       value={form.exactLocation}
+       readOnly
+        />
       <Input placeholder="Location" name="location" onChange={handleChange} />
       <Input placeholder="Phone Number" name="phone" onChange={handleChange} />
       <Input placeholder="Email" name="email" value={form.email} onChange={handleChange} />

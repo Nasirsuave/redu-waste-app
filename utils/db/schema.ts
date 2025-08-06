@@ -91,6 +91,7 @@ export const Sellers = pgTable('sellers', {
   wasteType: varchar('waste_type', { length: 100 }).notNull(),
   quantity: varchar('quantity', { length: 50 }).notNull(), // e.g., "10kg", "5 tons
   location: varchar('location', { length: 255 }).notNull(),
+  exactLocation: text('exact_location').notNull(), // new field for exact location
   price: varchar('price', { length: 50 }), // seller: price or "free"
   email: varchar('email', { length: 100 }),
   phone: varchar('phone', { length: 20 }),
@@ -108,6 +109,7 @@ export const Buyers = pgTable('buyers', {
     phone: varchar('phone', { length: 20 }),
     preferredWasteType: varchar('preferred_waste_type', { length: 100 }).notNull(),
     location: varchar('location', { length: 255 }).notNull(),
+    exactLocation: text('exact_location').notNull(), // new field for exact location
     createdAt: timestamp('created_at').defaultNow(),
     // updatedAt: timestamp('updated_at').defaultNow().notNull(),
     maxDistanceKm: integer('max_distance_km').notNull(), //the max location the seller should be away from the buyer

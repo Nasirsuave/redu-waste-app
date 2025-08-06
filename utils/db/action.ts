@@ -464,6 +464,7 @@ export async function getWasteCollectionTasks(limit: number = 20) {
       .select({
         id: Reports.id,
         location: Reports.location,
+        exactLocation: Reports.exactLocation,
         wasteType: Reports.wasteType,
         amount: Reports.amount,
         status: Reports.status,
@@ -704,6 +705,7 @@ export async function UploadForSale(
   quantity: string,
   phone: string,
   location: string,
+  exactLocation: string,
   email: string,
   
 ){
@@ -717,6 +719,7 @@ export async function UploadForSale(
         quantity,
         phone,
         location,
+        exactLocation,
         email,
         createdAt: new Date(),
       })
@@ -767,6 +770,7 @@ export async function UploadForBuy(
   phone: string,
   maxDistanceKm: number,
   location: string,
+  exactLocation: string,
 ){
   try{
     const [newBuyer] = await db
@@ -778,6 +782,7 @@ export async function UploadForBuy(
       phone,
       maxDistanceKm,
       location,
+      exactLocation,
       status: 'searching', // default value, but you can explicitly set it
     })
     .returning()
@@ -824,19 +829,25 @@ export async function updateBuyerStatus(buyerId: number, newStatus: 'searching' 
 
 
 
-//getSellersByWasteType
+
+
+
 // export async function getSellersByWasteType(wasteType: string) {
 //   try {
 //     const allSellers = await db.select().from(Sellers);
 //     console.log("✅ All sellers in DB:", allSellers);
 
-//     const sellers = await db.select().from(Sellers).where(ilike(Sellers.wasteType, wasteType.trim().toLowerCase()))
-//       //.where(eq(Sellers.status, "searching")); // Only include actively searching sellers
-//     console.log("Matching sellers found:", sellers);
+//     const cleaned = wasteType.trim().toLowerCase();
 
+//     const sellers = await db
+//       .select()
+//       .from(Sellers)
+//       .where(sql`LOWER(TRIM(${Sellers.wasteType})) = ${cleaned}`);
+
+//     console.log("✅ Matching sellers found:", sellers);
 //     return sellers;
 //   } catch (error) {
-//     console.error("Error fetching sellers by waste type:", error);
+//     console.error("❌ Error fetching sellers by waste type:", error);
 //     throw new Error("Could not fetch sellers.");
 //   }
 // }
@@ -844,17 +855,14 @@ export async function updateBuyerStatus(buyerId: number, newStatus: 'searching' 
 
 export async function getSellersByWasteType(wasteType: string) {
   try {
-    const allSellers = await db.select().from(Sellers);
-    console.log("✅ All sellers in DB:", allSellers);
-
-    const cleaned = wasteType.trim().toLowerCase();
+    const cleaned = `%${wasteType.trim().toLowerCase()}%`; // Add wildcard %
 
     const sellers = await db
       .select()
       .from(Sellers)
-      .where(sql`LOWER(TRIM(${Sellers.wasteType})) = ${cleaned}`);
+      .where(sql`LOWER(${Sellers.wasteType}) LIKE ${cleaned}`);
 
-    console.log("✅ Matching sellers found:", sellers);
+    console.log("✅ Fuzzy matching sellers found:", sellers);
     return sellers;
   } catch (error) {
     console.error("❌ Error fetching sellers by waste type:", error);
@@ -867,17 +875,131 @@ export async function getSellersByWasteType(wasteType: string) {
 
 //match with Gemini
 
+// export async function matchWithGemini({
+//   buyerLocation,
+//   exactLocation, // Include exact location for more accurate distance calculations
+//   maxDistanceKm,
+//   sellerList,
+// }: {
+//   buyerLocation: string;
+//   exactLocation: string; // buyer exact location for accurate distance calculations
+//   maxDistanceKm: number;
+//   sellerList: {
+//     sellerId: number;
+//     location: string;
+//     exactLocation: string;
+//     points: number;
+//   }[];
+// }) {
+//   try {
+//     const genAI = new GoogleGenerativeAI(geminiApiKey);
+//     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+//     const prompt = `
+// You are an assistant helping match a buyer with sellers based on location and reward points.
+
+// Buyer is located at:
+// "${buyerLocation}"
+
+// Maximum acceptable distance: ${maxDistanceKm} km
+
+// Here is a list of potential sellers:
+// ${sellerList.map(s => `Seller ID: ${s.sellerId}, Location: ${s.location}, Points: ${s.points}`).join('\n')}
+
+// Your task:
+// -You are good with the world map, so ensure Location of the seller tell us whether seller is within buyer Location(Be accurate as possible)
+// - Calculate the distance between the buyer and each seller
+// - Remove any sellers who are farther than ${maxDistanceKm} km
+// - From the remaining sellers, sort by:
+//   1. Shortest distance
+//   2. Highest points
+
+// Notice: the example below should be the format of your response(let it guide you in how you will strucuture your own response)
+
+// Your response should not look like this format :
+//  \`\`\`\  json
+// [
+//   {
+//     "sellerId": 1,
+//     "distanceKm": 1.5,
+//     "points": 50,
+//     "BuyerCloserToSeller": true or false
+//   },
+//   {
+//     "sellerId": 3,
+//     "distanceKm": 1.8,
+//     "points": 30,
+//     "BuyerCloserToSeller": true or false
+//   }
+// ]
+// \`\`\`
+
+// instead it should look like this format:
+// [
+//   {
+//     "sellerId": 1,
+//     "distanceKm": 1.5,
+//     "points": 50,
+//     "BuyerCloserToSeller": true or false
+//   },
+//   {
+//     "sellerId": 3,
+//     "distanceKm": 1.8,
+//     "points": 30,
+//     "BuyerCloserToSeller": true or false
+//   }
+// ]
+
+// - No code blocks (no triple backticks like \`\`\` or \`\`\`json)
+// - No explanations
+// - No text before or after the JSON
+// - No labels like "Here's your response:" or "Sure, here is the data:"
+
+// ❗Only return the raw JSON array. Nothing else.
+
+
+
+
+
+
+
+// `;
+//     console.log('Seller List:', sellerList);
+//     const result = await model.generateContent([prompt]);
+//     const response = await result.response;
+//     const text = response.text();
+
+//     console.log("Raw Gemini response:", text);
+
+//     // Parse Gemini's plain JSON response
+//     const matchedSellers = JSON.parse(text);
+//     return matchedSellers;
+//   } catch (error) {
+//     console.error("Error in Gemini matchmaking:", error);
+//     throw new Error("Failed to match sellers using Gemini.");
+//   }
+// }
+
+
+
 export async function matchWithGemini({
   buyerLocation,
+  exactLocation, // Buyer's GPS coordinates
   maxDistanceKm,
   sellerList,
 }: {
   buyerLocation: string;
+  exactLocation: string; // e.g., "Lat: 5.6037, Lng: -0.1870"
   maxDistanceKm: number;
   sellerList: {
+    userId: number;
     sellerId: number;
-    location: string;
+    location: string;         // General address
+    exactLocation: string;    // GPS format: "Lat: xxxxx, Lng: xxxxx"
     points: number;
+    email?: string;  // optional, passed but not exposed to Gemini
+    phone?: string;  // optional, passed but not exposed to Gemini
+    status?: string;
   }[];
 }) {
   try {
@@ -885,86 +1007,101 @@ export async function matchWithGemini({
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `
-You are an assistant helping match a buyer with sellers based on location and reward points.
+You are an assistant helping match a buyer with sellers based on real-world distance and reward points.
 
-Buyer is located at:
+ Buyer's general location:
 "${buyerLocation}"
 
-Maximum acceptable distance: ${maxDistanceKm} km
+ Buyer's exact location (GPS coordinates):
+"${exactLocation}"
 
-Here is a list of potential sellers:
-${sellerList.map(s => `Seller ID: ${s.sellerId}, Location: ${s.location}, Points: ${s.points}`).join('\n')}
+ Maximum acceptable distance: ${maxDistanceKm} km
 
-Your task:
--You are good with the world map, so ensure Location of the seller tell us whether seller is within buyer Location(Be accurate as possible)
-- Calculate the distance between the buyer and each seller
-- Remove any sellers who are farther than ${maxDistanceKm} km
-- From the remaining sellers, sort by:
-  1. Shortest distance
-  2. Highest points
+ Sellers:
+Each seller includes their general location and exact GPS coordinates. Use their coordinates for accurate distance comparison.
 
-Notice: the example below should be the format of your response(let it guide you in how you will strucuture your own response)
+${sellerList.map(s => 
+  ` Seller ID: ${s.sellerId}, Location: ${s.location}, ExactLocation: ${s.exactLocation}, Points: ${s.points} `
+).join('\n')}
 
-Your response should not look like this format :
- \`\`\`\  json
+🔍 Your Task:
+- Use the buyer and seller GPS coordinates (latitude and longitude) to calculate real-world distance (in km).
+- Exclude any seller farther than ${maxDistanceKm} km from the buyer.
+- Sort remaining sellers by:
+   1. Shortest distance
+   2. Highest reward points
+- Indicate if the seller is within the buyer's acceptable range.
+
+Your response should not look like this format:
+\`\`\`json
 [
   {
     "sellerId": 1,
     "distanceKm": 1.5,
     "points": 50,
-    "BuyerCloserToSeller": true or false
+    "BuyerCloserToSeller": true
   },
   {
     "sellerId": 3,
     "distanceKm": 1.8,
     "points": 30,
-    "BuyerCloserToSeller": true or false
+    "BuyerCloserToSeller": true
   }
 ]
 \`\`\`
 
-instead it should look like this format:
+ Instead it should look like this format :
 [
   {
     "sellerId": 1,
     "distanceKm": 1.5,
     "points": 50,
-    "BuyerCloserToSeller": true or false
+    "BuyerCloserToSeller": true
   },
   {
     "sellerId": 3,
     "distanceKm": 1.8,
     "points": 30,
-    "BuyerCloserToSeller": true or false
+    "BuyerCloserToSeller": true
   }
 ]
 
-- No code blocks (no triple backticks like \`\`\` or \`\`\`json)
-- No explanations
-- No text before or after the JSON
-- No labels like "Here's your response:" or "Sure, here is the data:"
+ Strict Output Rules:
+- NO code blocks
+- NO explanations
+- NO labels or extra text
+- ONLY the raw JSON array
 
-❗Only return the raw JSON array. Nothing else.
+// ❗Only return the raw JSON array. Nothing else. ()
+once again don't wrap your response in \`\`\`json \`\`\`
+    `;
 
-
-
-
-
-
-
-`;
-    console.log('Seller List:', sellerList);
+    console.log('🛰️ Seller List Sent to Gemini:', sellerList);
     const result = await model.generateContent([prompt]);
     const response = await result.response;
     const text = response.text();
 
-    console.log("Raw Gemini response:", text);
+    console.log(" Raw Gemini response:", text);
 
-    // Parse Gemini's plain JSON response
     const matchedSellers = JSON.parse(text);
-    return matchedSellers;
+    //return matchedSellers;
+  const enrichedResults = matchedSellers.map((match) => {
+  const original = sellerList.find((s) => s.sellerId === match.sellerId);
+  return {
+    ...match, // includes sellerId, distanceKm, points, BuyerCloserToSeller
+    userId: original?.userId ?? null,
+    email: original?.email ?? null,
+    phone: original?.phone ?? null,
+    status: original?.status ?? null,
+    location: original?.location ?? null,
+    exactLocation: original?.exactLocation ?? null,
+  };
+});
+
+return enrichedResults;
+
   } catch (error) {
-    console.error("Error in Gemini matchmaking:", error);
+    console.error(" Error in Gemini matchmaking:", error);
     throw new Error("Failed to match sellers using Gemini.");
   }
 }

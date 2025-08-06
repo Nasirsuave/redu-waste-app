@@ -10,9 +10,10 @@ import SellerList from './SellerList';
 import { StandaloneSearchBox, useJsApiLoader } from '@react-google-maps/api'
 import { Libraries } from "@react-google-maps/api"
 import { getUserByEmail,UploadForBuy,getBuyersByUser,updateBuyerStatus,getTotalTransactionAmount,getSellersByWasteType,matchWithGemini } from '../../../../utils/db/action';
-import { Loader, CheckCircle2, SearchCheck } from 'lucide-react';
+import { Loader, CheckCircle2, SearchCheck,Phone, Mail,ChevronDown,Info,MapPin,CircleCheck,Ruler } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-
+import { Dialog, Transition } from '@headlessui/react';
+import { Fragment } from 'react';
 
 
 const googleApikey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as string
@@ -31,8 +32,13 @@ type Transaction = {
 
 
 export default function BuyerForm() {
- const [loading, setLoading] = useState(true)
+const [loading, setLoading] = useState(true)
 const [user, setUser] = useState<{ id: number; email: string; name: string } | null>(null)
+const [geminiResults, setGeminiResults] = useState<any[]>([]);
+const [isModalOpen, setIsModalOpen] = useState(false);
+const [isGeminiLoading, setIsGeminiLoading] = useState(false);
+
+
 
 const [form, setForm] = useState({
   location: '',
@@ -59,12 +65,14 @@ const [transactions, setTransactions] = useState<Array<{
             toast.error('User not loaded. Please log in again.');
             return;
             }
-        const { location, phone, preferredWasteType, maxDistanceKm } = form;
+        const { location, phone, preferredWasteType, maxDistanceKm,exactLocation } = form;
 
-        if (!preferredWasteType || !phone || !location || !maxDistanceKm ) {
+        if (!preferredWasteType || !phone || !location || !maxDistanceKm || !exactLocation) {
             toast.error('Please fill in all fields.');
             return;
         }
+        setIsModalOpen(true);
+        setIsGeminiLoading(true);
 
         const newBuyer = await UploadForBuy(
         user.id, // Assuming you're passing userId from userInfo
@@ -72,7 +80,8 @@ const [transactions, setTransactions] = useState<Array<{
         "buyer",
         phone,
         maxDistanceKm,
-        location
+        location,
+        exactLocation
     );
 
     const updatedBuyers = await getBuyersByUser(user.id);
@@ -102,9 +111,14 @@ const [transactions, setTransactions] = useState<Array<{
       console.log(`👉 Seller ID: ${seller.userId}, Reward Points Result:`, result);
 
       return {
+        userId: seller.userId,
         sellerId: seller.id,
         location: seller.location,
+        exactLocation: seller.exactLocation, // Include exact location
         points: result?.total ?? 0, // fallback to 0 if undefined
+        email: seller.email ?? undefined,
+        phone: seller.phone ?? undefined,
+        status: seller.status ?? undefined,
       };
     })
 );
@@ -119,6 +133,7 @@ const [transactions, setTransactions] = useState<Array<{
       console.log("Before Match With Gemini")
       const geminiResult = await matchWithGemini({
       buyerLocation: location,
+      exactLocation, // Pass exact location
       maxDistanceKm,
       sellerList: sellerDataForGemini,
     });
@@ -126,33 +141,23 @@ const [transactions, setTransactions] = useState<Array<{
     
 
     console.log("Before overall result")
-    const topSeller = geminiResult?.matchedSellers?.[0]; 
+    const topSeller = geminiResult 
     console.log('Top Seller:', topSeller);
 
     console.log("After overall result")
 
-    // }catch(error){
-    //   console.error('Error matching with Gemini:', error);
-    //   toast.error('Failed to find matching sellers');
-    // }
-  
-
-
-    //working on it 
-
-  
-    // setForm({
-    //   location: '',
-    //   maxDistanceKm: 0,
-    //   phone: '',
-    //   preferredWasteType: '',
-    // })
+    setGeminiResults(geminiResult);
+    setIsGeminiLoading(false);
 
         toast.success('Buyer info uploaded successfully');
+
+        //de-populate the input field of the buyer
 
         }catch(error){
             console.error('Error finding sellers:', error);
             toast.error('Failed to find sellers');
+            setIsGeminiLoading(false);
+            setIsModalOpen(false);
         }
        
     }
@@ -245,7 +250,7 @@ const [transactions, setTransactions] = useState<Array<{
   return (
     <div className="space-y-8">
       {/* Buy Form */}
-      <div className="space-y-3 bg-white p-6 rounded-2xl shadow-md">
+      <div className="space-y-3 bg-white p-4 sm:p-6 rounded-2xl shadow-md">
         <h2 className="text-xl font-semibold">Buy Waste</h2>
         <Input
         placeholder="Your Location"
@@ -292,7 +297,7 @@ const [transactions, setTransactions] = useState<Array<{
       {sellers.length > 0 && <SellerList sellers={sellers} />}
 
       {/* Recent Transactions */}
-      <div className="bg-white rounded-2xl shadow-md p-6">
+      <div className="bg-white rounded-2xl shadow-md p-6 relative">
         <h2 className="text-xl font-semibold mb-4">Recent Transactions</h2>
         <table className="w-full text-sm text-left border">
           <thead>
@@ -338,6 +343,126 @@ const [transactions, setTransactions] = useState<Array<{
           </tbody>
         </table>
       </div>
+
+
+      {/* adding modal */}
+        <Transition show={isModalOpen} as={Fragment}>
+  <Dialog onClose={() => setIsModalOpen(false)} className="fixed z-50 inset-0 overflow-y-auto">
+    <div className="flex items-center justify-center min-h-screen p-4">
+
+      <Transition.Child
+        as={Fragment}
+        enter="ease-out duration-300"
+        enterFrom="opacity-0 scale-95"
+        enterTo="opacity-100 scale-100"
+        leave="ease-in duration-200"
+        leaveFrom="opacity-100 scale-100"
+        leaveTo="opacity-0 scale-95"
+      >
+
+        <Dialog.Panel
+  className="sticky top-[2rem] bg-white rounded-2xl p-4 sm:p-6 m-[5rem] w-full sm:max-w-3xl ml-[14rem] h-[30rem] shadow-xl transform transition-all z-50"
+>
+  <Dialog.Title className="text-xl font-semibold mb-4">Matched Sellers</Dialog.Title>
+
+  {isGeminiLoading ? (
+    <div className="flex items-center justify-center space-x-2 text-green-600">
+      <Loader className="animate-spin" size={24} />
+      <span>Finding Sellers closer to you...</span>
+    </div>
+  ) : (
+    <div className='overflow-x-auto'>
+    <table className="w-full min-w-[600px] text-sm border">
+      {/* <thead>
+        <tr>
+          <th className="p-4 bg-gray-100 text-gray-700" colSpan={5}>
+            <div className="flex items-center justify-between gap-6 text-sm font-semibold uppercase">
+              <div className="flex items-center gap-2">
+                <MapPin className="text-blue-500 w-4 h-4" />
+                <span>Location</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Ruler className="text-purple-500 w-4 h-4" />
+                <span>Distance</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Mail className="text-green-500 w-4 h-4" />
+                <span>Email</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Phone className="text-emerald-500 w-4 h-4" />
+                <span>Call</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Info className="text-orange-500 w-4 h-4" />
+                <span>Status</span>
+              </div>
+            </div>
+          </th>
+        </tr>
+      </thead> */}
+
+      <thead>
+  <tr className="bg-gray-100 text-gray-700 text-sm font-semibold uppercase">
+    <th className="p-4 text-center">
+      <div className="flex items-center justify-center gap-2">
+        <MapPin className="text-blue-500 w-4 h-4" />
+        <span>Location</span>
+      </div>
+    </th>
+    <th className="p-4 text-center">
+      <div className="flex items-center justify-center gap-2">
+        <Ruler className="text-purple-500 w-4 h-4" />
+        <span>Distance(Km)</span>
+      </div>
+    </th>
+    <th className="p-4 text-center">
+      <div className="flex items-center justify-center gap-2">
+        <Mail className="text-green-500 w-4 h-4" />
+        <span>Email</span>
+      </div>
+    </th>
+    <th className="p-4 text-center">
+      <div className="flex items-center justify-center gap-2">
+        <Phone className="text-emerald-500 w-4 h-4" />
+        <span>Call</span>
+      </div>
+    </th>
+    <th className="p-4 text-center">
+      <div className="flex items-center justify-center gap-2">
+        <Info className="text-orange-500 w-4 h-4" />
+        <span>Status</span>
+      </div>
+    </th>
+  </tr>
+</thead>
+
+      <tbody>
+        {geminiResults.map((s, i) => (
+          <tr key={i} className="border-t text-center">
+            <td className="p-3 w-10 text-center">{s.location}</td>
+            <td className="p-3 w-10 text-center">{s.distanceKm}</td>
+            <td className="p-3 w-10 text-center">{s.email}</td>
+            <td className="p-3 w-10 text-center">{s.phone}</td>
+            <td className="p-3 w-10 text-center">{s.status}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+   </div>
+  )}
+</Dialog.Panel>
+
+      </Transition.Child>
+    </div>
+  </Dialog>
+</Transition>
+
     </div>
   );
 }
+
+
+
+
+

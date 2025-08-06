@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input'
 import { toast } from 'react-hot-toast'
 import { getWasteCollectionTasks, updateTaskStatus, saveReward, saveCollectedWaste, getUserByEmail } from "../../../../utils/db/action"
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import MyMap from './MyMap'
+import MapModal from './MapModal'
 
 // Make sure to set your Gemini API key in your environment variables
 const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY as string
@@ -14,6 +16,7 @@ const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY as string
 type CollectionTask = {
   id: number
   location: string
+  exactLocation: string //new here 
   wasteType: string
   amount: string
   status: 'pending' | 'in_progress' | 'completed' | 'verified'
@@ -24,6 +27,8 @@ type CollectionTask = {
 const ITEMS_PER_PAGE = 5
 
 export default function CollectPage() {
+  const [isOpen,setIsOpen] = useState(false)
+  const [mapLocation, setMapLocation] = useState<string | null>(null)
   const [tasks, setTasks] = useState<CollectionTask[]>([])
   const [loading, setLoading] = useState(true)
   const [hoveredWasteType, setHoveredWasteType] = useState<string | null>(null)
@@ -209,7 +214,7 @@ export default function CollectPage() {
 
   const pageCount = Math.ceil(filteredTasks.length / ITEMS_PER_PAGE)
   const paginatedTasks = filteredTasks.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
+    (currentPage - 1) * ITEMS_PER_PAGE, 
     currentPage * ITEMS_PER_PAGE
   )
 
@@ -289,6 +294,21 @@ export default function CollectPage() {
                     <span className="text-green-600 text-sm font-medium">Reward Earned</span>
                   )}
                 </div>
+                {/* working on button leading to map */}
+                 <div>
+                  <Button
+                   onClick={() => {
+                  setIsOpen(true)
+                  setMapLocation(task.exactLocation)
+                   }}
+                  variant="secondary"
+                  size="sm"
+                  >
+                  Map
+                  </Button>
+                 </div>
+                 
+                 <MapModal isOpen={isOpen} setIsOpen={setIsOpen} exactLocation={mapLocation} />
               </div>
             ))}
           </div>
